@@ -43,7 +43,7 @@
 
             <div class="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-primary-100 transition-colors">
                 <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Peminjam</p>
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Dipinjam</p>
                     <h3 class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['peminjam'] }}</h3>
                 </div>
                 <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
@@ -77,7 +77,7 @@
 
             <div class="p-6 bg-white rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between group hover:border-primary-100 transition-colors">
                 <div>
-                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Aktif</p>
+                    <p class="text-xs font-semibold text-gray-400 uppercase tracking-widest">Dipinjam</p>
                     <h3 class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['my_active_loans'] }}</h3>
                 </div>
                 <div class="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-primary-50 group-hover:text-primary-600 transition-colors">

@@ -15,20 +15,6 @@
         </button>
     </div>
 
-    @if(session('success'))
-        <div class="p-4 mb-4 text-sm text-green-800 rounded-2xl bg-green-50 border border-green-100 no-print flex items-center gap-3">
-            <i data-lucide="check-circle" class="w-4 h-4 text-green-600"></i>
-            {{ session('success') }}
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="p-4 mb-4 text-sm text-red-800 rounded-2xl bg-red-50 border border-red-100 no-print flex items-center gap-3">
-            <i data-lucide="alert-circle" class="w-4 h-4 text-red-600"></i>
-            {{ session('error') }}
-        </div>
-    @endif
-
     <!-- Table Card -->
     <div class="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden print:shadow-none print:border-none">
         <div class="overflow-x-auto">

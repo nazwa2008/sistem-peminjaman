@@ -24,7 +24,7 @@ class DashboardController extends Controller
                 $stats['rusak'] = Alat::sum('stok_rusak');
             }
             
-            $stats['peminjam']   = Peminjaman::where('status', 'dipinjam')->count();
+            $stats['peminjam']   = Peminjaman::whereIn('status', ['dipinjam', 'pending'])->count();
             
             if ($user->role == 'petugas') {
                 $stats['pending'] = Peminjaman::where('status', 'pending')->count();

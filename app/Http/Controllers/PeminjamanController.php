@@ -18,9 +18,14 @@ class PeminjamanController extends Controller
     {
         $user = Auth::user();
         if ($user->role == 'admin' || $user->role == 'petugas') {
-            $peminjaman = Peminjaman::with(['user', 'details.alat'])->latest()->paginate(10);
+            $peminjaman = Peminjaman::with(['user', 'details.alat'])
+                ->latest()
+                ->paginate(10);
         } else {
-            $peminjaman = Peminjaman::with(['details.alat'])->where('user_id', $user->id)->latest()->paginate(10);
+            $peminjaman = Peminjaman::with(['details.alat'])
+                ->where('user_id', $user->id)
+                ->latest()
+                ->paginate(10);
         }
         return view('peminjaman.index', compact('peminjaman'));
     }
@@ -110,6 +115,7 @@ class PeminjamanController extends Controller
             ->whereHas('peminjaman', function($q) {
                 $q->where('status', 'dipinjam');
             })
+            ->has('alat') // Pastikan alatnya ada
             ->latest()
             ->get();
             
@@ -119,87 +125,51 @@ class PeminjamanController extends Controller
     public function processReturn(Request $request, PeminjamanDetail $detail)
     {
         $request->validate([
-            'kondisi_akhir' => 'required|in:Baik,Rusak,Hilang',
-            'alasan_denda' => 'nullable|in:terlambat,rusak,hilang',
+            'kondisi_akhir' => 'required|string',
+            'jumlah_hari' => 'nullable|integer|min:0',
+            'denda_manual' => 'nullable|numeric|min:0',
         ]);
 
-        $tanggal_sekarang = Carbon::now();
-        $tanggal_kembali = Carbon::parse($detail->tanggal_kembali);
-        
-        $denda_terlambat = 0;
-        $denda_kondisi = 0;
-        $hari_terlambat = 0;
+        $total_denda = 0;
+        $keterangan_denda = null;
 
-        // 1. Hitung Denda Keterlambatan
-        if ($tanggal_sekarang->isAfter($tanggal_kembali)) {
-            // Kita gunakan diffInDays yang menghasilkan integer absolut
-            $hari_terlambat = (int) $tanggal_sekarang->diffInDays($tanggal_kembali);
-            $denda_terlambat = $hari_terlambat * 5000;
-        }
-
-        // 2. Hitung Denda Kondisi Alat
-        if ($request->kondisi_akhir == 'Rusak') {
-            $denda_kondisi = 5000;
-        } elseif ($request->kondisi_akhir == 'Hilang') {
-            $denda_kondisi = 50000;
-        }
-
-        $total_denda = $denda_terlambat + $denda_kondisi;
-
-        // 3. Susun Keterangan Denda yang Transparan
-        $rincian = [];
-        if ($hari_terlambat > 0) {
-            $rincian[] = "Keterlambatan ($hari_terlambat Hari): Rp " . number_format($denda_terlambat, 0, ',', '.');
-        }
-        
-        if ($request->kondisi_akhir == 'Rusak') {
-            $rincian[] = "Kerusakan Alat: Rp " . number_format($denda_kondisi, 0, ',', '.');
-        } elseif ($request->kondisi_akhir == 'Hilang') {
-            $rincian[] = "Kehilangan Alat: Rp " . number_format($denda_kondisi, 0, ',', '.');
-        }
-
-        $keterangan_denda = implode(" & ", $rincian);
-        if (empty($keterangan_denda) && $total_denda > 0) {
-            $keterangan_denda = "Denda Lainnya";
-        }
-
-        // Tentukan alasan_denda utama untuk statistik
-        $alasan_denda = null;
-        if ($hari_terlambat > 0 && $denda_kondisi > 0) {
-            $alasan_denda = 'terlambat'; // atau bisa buat enum baru, tapi kita pakai yang ada
-        } elseif ($hari_terlambat > 0) {
-            $alasan_denda = 'terlambat';
-        } elseif ($request->kondisi_akhir == 'Rusak') {
-            $alasan_denda = 'rusak';
-        } elseif ($request->kondisi_akhir == 'Hilang') {
-            $alasan_denda = 'hilang';
+        if ($request->kondisi_akhir === 'Telat') {
+            $hari = $request->jumlah_hari ?? 0;
+            $total_denda = $hari * 5000;
+            $keterangan_denda = "Keterlambatan ($hari Hari): Rp " . number_format($total_denda, 0, ',', '.');
+        } elseif ($request->kondisi_akhir === 'Rusak / Hilang') {
+            $total_denda = $request->denda_manual ?? 0;
+            $keterangan_denda = "Kompensasi Rusak / Hilang: Rp " . number_format($total_denda, 0, ',', '.');
         }
 
         $detail->update([
-            'tanggal_pengembalian' => $tanggal_sekarang,
+            'tanggal_pengembalian' => now(),
             'kondisi_akhir' => $request->kondisi_akhir,
             'denda' => $total_denda,
-            'alasan_denda' => $alasan_denda,
             'keterangan_denda' => $keterangan_denda,
             'status_item' => 'dikembalikan',
             'returned_by_id' => Auth::id(),
         ]);
 
-        // LOGIKA OTOMATIS: Update stok dan kondisi alat
+        // LOGIKA UPDATE STOK
         $alat = $detail->alat;
-        if ($request->kondisi_akhir == 'Rusak') {
-            // Jika rusak, kurangi stok Baik dan tambah stok Rusak
-            // Stok tersedia tidak bertambah karena alat masuk kategori Rusak
-            $alat->increment('stok_rusak');
+        if ($request->kondisi_akhir === 'Rusak / Hilang') {
+            // Kita asumsikan Rusak / Hilang mengurangi stok total (karena alat sudah tidak layak pakai/hilang)
+            // Namun jika user ingin membedakan, bisa ditambah logika stok_rusak
+            // Sesuai permintaan awal user: "Rusak / Hilang" digabung.
+            // Kita kurangi stok_baik saja, dan biarkan stok_total berkurang jika hilang (atau tetap jika rusak)
+            // Untuk simplifikasi, kita kurangi stok_baik (karena item ini tidak kembali dalam keadaan baik)
             $alat->decrement('stok_baik');
-        } elseif ($request->kondisi_akhir == 'Hilang') {
-            // Jika hilang, kurangi stok Baik dan kurangi total kepemilikan
-            // Stok tersedia tidak bertambah karena alat hilang
-            $alat->decrement('stok_baik');
-            $alat->decrement('stok_total');
-        } else {
+            
+            // Opsional: Jika rusak, mungkin masuk ke stok_rusak. Jika hilang, kurangi stok_total.
+            // Tapi karena pilihannya digabung, kita kurangi stok_baik saja agar stok_tersedia tidak bertambah.
+        } elseif ($request->kondisi_akhir === 'Baik') {
             // Jika kembali 'Baik', stok tersedia bertambah
             $alat->increment('stok_tersedia');
+        }
+        // Jika 'Telat' tapi kondisi alat tetap 'Baik', maka stok_tersedia tetap harus bertambah
+        if ($request->kondisi_akhir === 'Telat') {
+             $alat->increment('stok_tersedia');
         }
 
         // Check if all items in this loan are returned
@@ -208,7 +178,7 @@ class PeminjamanController extends Controller
             $peminjaman->update(['status' => 'selesai']);
         }
 
-        return back()->with('success', 'Alat ' . $detail->alat->nama_alat . ' berhasil dikembalikan. Denda: Rp ' . number_format($total_denda));
+        return back()->with('success', 'Alat ' . $detail->alat->nama_alat . ' berhasil dikembalikan. Denda: Rp ' . number_format($total_denda, 0, ',', '.'));
     }
 
     public function laporan()
